@@ -15,6 +15,23 @@ INQUIRY_URL = "{VPS_URL}/api/v1/recommendation/inquiry/whatsapp"
 BOOKING_URL = "{VPS_URL}/api/v1/recommendation/inquiry/book/{ticket_id}/{venue_id}"
 NEXT_BOOKING_URL = "{VPS_URL}/api/v1/recommendation/inquiry/whatsapp/{ticket_id}/next-recommendation"  # add phone number
 
+async def get_venue_recommendation(phone_number: str, text_body: str, k_venue=5):
+    payload = {
+        "phone_number": phone_number,
+        "text_body": text_body,
+        "k_venue": k_venue
+    }
+
+    inquiry_url = INQUIRY_URL.format(VPS_URL=VPS_URL)
+    async with httpx.AsyncClient(timeout=15) as client:
+        response = await client.post(inquiry_url, json=payload)
+        response.raise_for_status()
+        
+    response_json = response.json()
+    logger.info(f"Venue Recommendation: {response_json}")
+    return response_json
+    
+
 async def chat_inquiry(user_name: str, message: str, phone_number: str, k_venue: int = 5) -> str:
     """
     Send a WhatsApp inquiry to the recommendation API and return a formatted response.
@@ -136,6 +153,18 @@ async def chat_inquiry_next(user_name: str, phone_number: str, last_message: str
     )
 
     return response_text
+
+async def book_venue(ticket_id: str, venue_name: str, venue_id: str):
+    booking_url = BOOKING_URL.format(VPS_URL=VPS_URL, ticket_id=ticket_id, venue_id=venue_id)
+    logger.info(f"Book Selected Venue: booking_url: {booking_url}")
+    async with httpx.AsyncClient(timeout=15) as client:
+        response = await client.get(booking_url)
+
+    logger.info(f"Book Selected Venue: response: {response}")
+    if response.status_code == 200:
+        return f"Success! The venue *{venue_name}* ({venue_id}) has been successfully booked under ticket {ticket_id}."
+    else:
+        return f"Failed to book the venue *{venue_name}* ({venue_id}). Please request another inquiry or try again later."
 
 async def book_selected_venue(selected_venue_index: int, inquiry_chat: str) -> str:
     """
