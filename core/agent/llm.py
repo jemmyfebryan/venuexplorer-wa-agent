@@ -71,10 +71,10 @@ async def get_venue_summary(
     openai_client: AsyncOpenAI,
     messages: List[ChatCompletionMessageParam]
 ):
-    messages_user = [msg for msg in messages if msg.get("role") == "user"]
+    # messages_user = [msg for msg in messages if msg.get("role") == "user"]
     venue_summary = await chat_completion(
         openai_client=openai_client,
-        user_prompt=messages_user,
+        user_prompt=messages,
         system_prompt=VENUE_SUMMARY_SYSTEM_PROMPT,
         model_name="gpt-4.1-mini",
     )
