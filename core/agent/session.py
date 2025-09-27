@@ -593,6 +593,7 @@ async def chat_response(
                 openai_client=openai_client,
                 messages=llm_messages
             )
+            logger.info(f"Venue Summary: {venue_summary}")
             venue_recommendation = await get_venue_recommendation(
                 phone_number=phone,
                 text_body=venue_summary,
@@ -603,6 +604,7 @@ async def chat_response(
                 messages=llm_messages,
                 venue_recommendation=venue_recommendation
             )
+            logger.info(f"Venue Conclusion: {venue_conclusion}")
             extra_prompt = f"""
 Answer the user message using the following format: {venue_conclusion}  
 
@@ -614,12 +616,14 @@ Answer the user message using the following format: {venue_conclusion}
                 openai_client=openai_client,
                 messages=llm_messages
             )
+            logger.info(f"Venue Summary: {venue_summary}")
             venue_recommendation = await get_venue_recommendation(
                 phone_number=phone,
                 text_body=venue_summary,
                 k_venue=5
             )
             ticket_id = venue_recommendation.get("ticket_id", "N/A")
+            logger.info(f"Ticket ID: {ticket_id}")
             confirm_booking_result = await get_confirm_booking(
                 openai_client=openai_client,
                 messages=llm_messages,
@@ -627,6 +631,8 @@ Answer the user message using the following format: {venue_conclusion}
             )
             venue_name = confirm_booking_result.get("venue_name")
             venue_id = confirm_booking_result.get("venue_id")
+            
+            logger.info(f"Venue Name: {venue_name}, Venue ID: {venue_id}")
             
             book_venue_text = await book_venue(
                 ticket_id=ticket_id,

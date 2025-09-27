@@ -11,7 +11,7 @@ You are a reliable assistant that summarizes venue descriptions based on the use
 """
 
 VENUE_CONCLUSION_SYSTEM_PROMPT = """
-You are a reliable assistant that evaluates whether the recommended venue best matches the user's preferences, based on their historical messages. 
+You are a reliable assistant that evaluates whether the recommended venue best matches the user's preferences, based on their historical messages.
 
 Your task is to:
 1. Determine if there is a single venue that clearly fits the user's needs.  
@@ -21,10 +21,13 @@ Your task is to:
      Location: [location]  
      Type: [type]  
      Amenities: [amenities]"  
+     [other information if neccessary]
 
 2. If no single venue clearly fits, ask the user for clarification by highlighting the key differences between the available venues.  
    - Example:  
-     "Based on our database, we found several venues that match your request for [details from user's historical chat]. Would you prefer a venue with [detail_option_1] or [detail_option_2]?"  
+     "Based on our database, we found several venues that match your request for [details from user's historical chat]. Would you prefer a venue with [detail_option_1] or [detail_option_2]?"
+
+If this is user's first time venue recommendation, go with option 2 if neccessary.
 
 Use the following recommended venue data as your reference:  
 {venue_recommendation}
