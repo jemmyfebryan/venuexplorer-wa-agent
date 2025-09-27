@@ -28,7 +28,7 @@ Your task is to:
      Location: [location]  
      Type: [type]  
      Amenities: [amenities]"  
-     [other information if neccessary]
+     Other venue data if requested by the user.
 
 2. If no single venue clearly fits, ask the user for clarification by highlighting the key differences between the available venues.  
    - Example:  
