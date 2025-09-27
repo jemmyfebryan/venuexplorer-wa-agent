@@ -579,7 +579,11 @@ async def chat_response(
         logger.info(f"Question class dict: {question_class_dict}")
         
         if question_class_tools == "general_talk":
-            extra_prompt = ""
+            extra_prompt = f"""
+- If the user engages in general conversation (not related to booking), respond as a normal assistant.
+- If the user wants to make a booking but does not specify a location, ask the user to provide the location.
+- If the user talks about booking or makes an inquiry and a location has already been specified (either in the current message or earlier in the conversation history), ask the user for more details about the venue.
+"""
         elif question_class_tools == "end_session":
             logger.info("User want to end session by chat")
             await _SESSION_MANAGER.end_session(phone=phone, client=client)
