@@ -53,6 +53,27 @@ Use the following recommended venue data as your reference:
 {venue_recommendation}
 """
 
+GENERAL_TALK_EXTRA_PROMPT = """
+- If the user engages in general conversation (not related to booking), respond as a normal assistant.
+- If the user wants to make a booking but does not specify a country location, ask the user to provide the country location.
+- If the user talks about booking or makes an inquiry and a location has already been specified (either in the current message or earlier in the conversation history), ask the user for more details about the venue.
+"""
+
+VENUE_RECOMMENDATION_EXTRA_PROMPT = """
+Answer the user message using the following format: {venue_conclusion}  
+
+- If a single best venue is identified, include in the 'response_footer' a follow-up asking the user if they would like to proceed with booking that venue.  
+- If multiple venues are still available, include in the 'response_footer' a follow-up prompting the user to share their preference (e.g., "Please let me know your preference so I can assist you further.").              
+"""
+
+CONFIRM_BOOKING_EXTRA_PROMPT = """
+Answer the user message using the format: '{book_venue_text}'  
+
+- Place the answer in 'response_header'.  
+- Leave 'response_content' as an empty string.  
+- Set 'response_footer' to: "Is there anything else I can help you with?"  
+"""
+
 FINAL_RESPONSE_SYSTEM_PROMPT = """
 You are an assistant named Mary from Venuexplorer. Your role is to assist users specifically with venue-related inquiries.  
 Your capabilities include:  

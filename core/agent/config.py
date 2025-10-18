@@ -1,3 +1,17 @@
+# Session Configuration
+INACTIVITY_WARNING_SECONDS = 3 * 60  # 3 minutes
+INACTIVITY_END_SECONDS = 5 * 60  # 5 minutes
+FORCED_SESSION_SECONDS = 1 * 30 * 30  # 1 hour
+FORCED_WARNING_BEFORE = 5 * 60  # 5 minutes
+
+# Messages Configuration
+AGENT_ERROR_DEFAULT_MESSAGE = "Sorry, but I can't assist you with that."
+AGENT_SESSION_WARNING_MESSAGE = "Mary will end this chat in 2 minutes due to inactivity. Just reply to continue the conversation."
+AGENT_SESSION_LIMIT_MESSAGE = "Mary will end this chat in 5 minutes due to session limit."
+AGENT_SESSION_END_MESSAGE = "Thank you for contacting Mary! If you need help again later, feel free to reach out anytime."
+
+
+# Question Class Configuration
 question_class_details = {
     "inquiry": {
         "description": "Inquiry regarding venue details, including booking process, venue specifications, available amenities, and related information. If the user want to book but the chat is too early (2 first chat), just go to 'general_talk' class. But If the chat is long enough, go for this class.",

@@ -55,7 +55,23 @@ from core.agent.llm import (
     get_confirm_booking,
     get_final_response,
 )
-from core.agent.config import question_class_details
+from core.agent.config import (
+    INACTIVITY_END_SECONDS,
+    INACTIVITY_WARNING_SECONDS,
+    FORCED_SESSION_SECONDS,
+    FORCED_WARNING_BEFORE,
+    question_class_details,
+    AGENT_ERROR_DEFAULT_MESSAGE,
+    AGENT_SESSION_WARNING_MESSAGE,
+    AGENT_SESSION_END_MESSAGE,
+    AGENT_SESSION_LIMIT_MESSAGE,
+)
+
+from core.agent.prompts import (
+    GENERAL_TALK_EXTRA_PROMPT,
+    VENUE_RECOMMENDATION_EXTRA_PROMPT,
+    CONFIRM_BOOKING_EXTRA_PROMPT,
+)
 
 from core.logger import get_logger
 
@@ -71,10 +87,6 @@ load_dotenv(override=True)
 CORE_DIR = Path(__file__).resolve().parents[1]  # core/
 DB_DIR = CORE_DIR / "database"
 DB_PATH = DB_DIR / "chat_sessions.db"
-INACTIVITY_WARNING_SECONDS = 3 * 60  # 3 minutes
-INACTIVITY_END_SECONDS = 5 * 60  # 5 minutes
-FORCED_SESSION_SECONDS = 1 * 30 * 30  # 1 hour
-FORCED_WARNING_BEFORE = 5 * 60  # 5 minutes
 
 # -----------------------------
 # Lightweight sqlite wrapper
@@ -370,7 +382,7 @@ class SessionManager:
                 # activity happened - watcher will be restarted by touch_session
                 return
             # send warning
-            warn_text = "Mary will end this chat in 2 minutes due to inactivity. Just reply to continue the conversation."
+            warn_text = AGENT_SESSION_WARNING_MESSAGE
             try:
                 client.sendText(entry.jid, warn_text)
             except Exception:
@@ -389,7 +401,7 @@ class SessionManager:
             # end session
             logger.info(f"Ending session {entry.session_id} for {entry.phone} due to inactivity")
             try:
-                client.sendText(entry.jid, "Thank you for contacting Mary! If you need help again later, feel free to reach out anytime.")
+                client.sendText(entry.jid, AGENT_SESSION_END_MESSAGE)
             except Exception:
                 logger.exception("Failed to send inactivity final message")
             await self.db.end_session(entry.session_id, ended_at=int(time.time()), status="ended")
@@ -414,7 +426,7 @@ class SessionManager:
             if not sess or sess.get("status") != "active":
                 return
             try:
-                client.sendText(entry.jid, "Mary will end this chat in 5 minutes due to session limit.")
+                client.sendText(entry.jid, AGENT_SESSION_LIMIT_MESSAGE)
             except Exception:
                 logger.exception("Failed to send forced-end warning")
             await asyncio.sleep(FORCED_WARNING_BEFORE)
@@ -424,7 +436,7 @@ class SessionManager:
                 return
             logger.info(f"Force ending session {entry.session_id} for {entry.phone} due to time limit")
             try:
-                client.sendText(entry.jid, "Thank you for contacting Mary! If you need help again later, feel free to reach out anytime.")
+                client.sendText(entry.jid, AGENT_SESSION_END_MESSAGE)
             except Exception:
                 logger.exception("Failed to send forced final message")
             await self.db.end_session(entry.session_id, ended_at=int(time.time()), status="ended")
@@ -448,7 +460,7 @@ class SessionManager:
                 logger.exception("Failed to end session in DB")
                 return False
             try:
-                client.sendText(entry.jid, "Thank you for contacting Mary! If you need help again later, feel free to reach out anytime.")
+                client.sendText(entry.jid, AGENT_SESSION_END_MESSAGE)
             except Exception:
                 logger.exception("Failed to send session end message")
             await self._cancel_tasks(entry)
@@ -579,11 +591,7 @@ async def chat_response(
         logger.info(f"Question class dict: {question_class_dict}")
         
         if question_class_tools == "general_talk":
-            extra_prompt = f"""
-- If the user engages in general conversation (not related to booking), respond as a normal assistant.
-- If the user wants to make a booking but does not specify a country location, ask the user to provide the country location.
-- If the user talks about booking or makes an inquiry and a location has already been specified (either in the current message or earlier in the conversation history), ask the user for more details about the venue.
-"""
+            extra_prompt = GENERAL_TALK_EXTRA_PROMPT
         elif question_class_tools == "end_session":
             logger.info("User want to end session by chat")
             await _SESSION_MANAGER.end_session(phone=phone, client=client)
@@ -605,12 +613,9 @@ async def chat_response(
                 venue_recommendation=venue_recommendation
             )
             logger.info(f"Venue Conclusion: {venue_conclusion}")
-            extra_prompt = f"""
-Answer the user message using the following format: {venue_conclusion}  
-
-- If a single best venue is identified, include in the 'response_footer' a follow-up asking the user if they would like to proceed with booking that venue.  
-- If multiple venues are still available, include in the 'response_footer' a follow-up prompting the user to share their preference (e.g., "Please let me know your preference so I can assist you further.").              
-"""
+            extra_prompt = VENUE_RECOMMENDATION_EXTRA_PROMPT.format(
+                venue_conclusion=venue_conclusion
+            )
         elif question_class_tools == "confirm_booking":
             venue_summary = await get_venue_summary(
                 openai_client=openai_client,
@@ -637,16 +642,12 @@ Answer the user message using the following format: {venue_conclusion}
             book_venue_text = await book_venue(
                 ticket_id=ticket_id,
                 venue_name=venue_name,
-                venue_id=venue_id
+                venue_id=venue_id,
             )
             
-            extra_prompt = f"""
-Answer the user message using the format: '{book_venue_text}'  
-
-- Place the answer in 'response_header'.  
-- Leave 'response_content' as an empty string.  
-- Set 'response_footer' to: "Is there anything else I can help you with?"  
-"""
+            extra_prompt = CONFIRM_BOOKING_EXTRA_PROMPT.format(
+                book_venue_text=book_venue_text
+            )
         else:
             logger.error(f"Can't find the question_class")
             return
@@ -673,10 +674,10 @@ Answer the user message using the format: '{book_venue_text}'
         final_response_str = markdown_to_whatsapp(final_response_str)
         
         if not final_response_str:
-            final_response_str = "Sorry, but I can't assist you with that."
+            final_response_str = AGENT_ERROR_DEFAULT_MESSAGE
     except Exception as e:
         logger.exception("Error in response chat (type=%s): %r", type(e).__name__, e)
-        final_response_str = "Sorry, but I can't assist you with that."
+        final_response_str = AGENT_ERROR_DEFAULT_MESSAGE
 
 
     # send the reply
