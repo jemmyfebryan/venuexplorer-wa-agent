@@ -695,28 +695,3 @@ Answer the user message using the format: '{book_venue_text}'
     await _SESSION_MANAGER.touch_session(phone, client)
 
     return final_response_str
-
-# -----------------------------
-# Exported helper to register decorator handler from main.py
-# -----------------------------
-
-# def register_conv_handler(bot):
-#     """Registers a on-message handler for r"^conv" on the provided ChatBotHandler instance.
-
-#     Usage (in your main.py after creating `bot = ChatBotHandler(client)`):
-
-#         from src.orin_wa_report.core.agent.handler import register_conv_handler
-#         register_conv_handler(bot)
-
-#     The handler simply forwards messages to chat_response.
-#     """
-#     @bot.on(r"^vx")
-#     async def conv_handler(msg, client, history):
-#         # we ignore group messages here
-#         if msg.get("data", {}).get("isGroupMsg") or msg["data"]["fromMe"]:
-#             return
-        
-#         await chat_response(
-#             msg=msg,
-#             client=client,
-#         )
