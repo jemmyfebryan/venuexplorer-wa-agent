@@ -1,6 +1,6 @@
 import copy
 from datetime import datetime, timedelta, timezone
-from typing import List, Dict
+from typing import List, Dict, Any
 import pandas as pd
 import json
 from openai import AsyncOpenAI
@@ -11,6 +11,7 @@ from core.agent.formatted_schemas import (
     get_question_class_formatted_schema,
     get_confirm_booking_formatted_schema,
     get_final_response_formatted_schema,
+    get_extract_user_requirements_formatted_schema,
 )
 from core.agent.prompts import (
     QUESTION_CLASS_SYSTEM_PROMPT,
@@ -113,6 +114,36 @@ async def get_confirm_booking(
     )
     
     return confirm_book_response
+
+async def extract_user_requirements(
+    openai_client: AsyncOpenAI,
+    messages: List[ChatCompletionMessageParam]
+) -> Dict[str, Any]:
+    """
+    Extract structured user requirements from conversation history.
+    Returns a dictionary with keys: event_type, location, attendees, budget, start_date, end_date, email
+    """
+    system_prompt = """
+    You are an assistant that extracts structured information about venue requirements from conversations.
+    Extract the following details:
+    - event_type (e.g., corporate, wedding, meeting)
+    - location (city or region)
+    - attendees (number of people)
+    - budget (as a string with currency)
+    - start_date (YYYY-MM-DD format)
+    - end_date (YYYY-MM-DD format)
+    - email (if provided)
+    
+    If any information is missing, leave it as null.
+    """
+    
+    return await chat_completion(
+        openai_client=openai_client,
+        user_prompt=messages,
+        system_prompt=system_prompt,
+        formatted_schema=get_extract_user_requirements_formatted_schema(),
+        model_name="gpt-4.1-mini",
+    )
 
 async def get_final_response(
     openai_client: AsyncOpenAI,

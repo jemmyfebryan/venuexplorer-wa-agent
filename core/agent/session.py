@@ -46,7 +46,8 @@ from typing import Optional, Dict, Any, List
 import copy
 from core.agent.handler import (
     get_venue_recommendation,
-    book_venue
+    book_venue,
+    book_now
 )
 from core.agent.llm import (
     get_question_class,
@@ -54,6 +55,7 @@ from core.agent.llm import (
     get_venue_conclusion,
     get_confirm_booking,
     get_final_response,
+    extract_user_requirements,
 )
 from core.agent.config import (
     INACTIVITY_END_SECONDS,
@@ -143,6 +145,19 @@ class ChatDB:
             );
 
             CREATE INDEX IF NOT EXISTS idx_messages_session_ts ON messages(session_id, timestamp);
+            
+            -- NEW TABLE FOR USER REQUIREMENTS
+            CREATE TABLE IF NOT EXISTS user_requirements (
+                session_id TEXT NOT NULL,
+                event_type TEXT,
+                location TEXT,
+                attendees INTEGER,
+                budget TEXT,
+                start_date TEXT,
+                end_date TEXT,
+                email TEXT,
+                FOREIGN KEY(session_id) REFERENCES sessions(id)
+            );
             """
         )
         self._conn.commit()
@@ -256,6 +271,71 @@ class ChatDB:
                 })
             return out
         return await self._run(_get)
+        
+    # --- user requirements ---
+    async def get_user_requirements(self, session_id: str) -> Dict[str, Any]:
+        def _get():
+            cur = self._conn.cursor()
+            cur.execute(
+                "SELECT event_type, location, attendees, budget, start_date, end_date, email FROM user_requirements WHERE session_id = ?",
+                (session_id,)
+            )
+            row = cur.fetchone()
+            if not row:
+                return {}
+            keys = ["event_type", "location", "attendees", "budget", "start_date", "end_date", "email"]
+            return dict(zip(keys, row))
+        return await self._run(_get)
+
+    async def update_user_requirements(self, session_id: str, requirements: Dict[str, Any]):
+        def _upsert():
+            cur = self._conn.cursor()
+            # Check if record exists
+            cur.execute("SELECT 1 FROM user_requirements WHERE session_id = ?", (session_id,))
+            exists = cur.fetchone()
+            
+            if exists:
+                # Update existing
+                cur.execute(
+                    """UPDATE user_requirements SET
+                    event_type = COALESCE(?, event_type),
+                    location = COALESCE(?, location),
+                    attendees = COALESCE(?, attendees),
+                    budget = COALESCE(?, budget),
+                    start_date = COALESCE(?, start_date),
+                    end_date = COALESCE(?, end_date),
+                    email = COALESCE(?, email)
+                    WHERE session_id = ?""",
+                    (
+                        requirements.get("event_type"),
+                        requirements.get("location"),
+                        requirements.get("attendees"),
+                        requirements.get("budget"),
+                        requirements.get("start_date"),
+                        requirements.get("end_date"),
+                        requirements.get("email"),
+                        session_id
+                    )
+                )
+            else:
+                # Insert new
+                cur.execute(
+                    """INSERT INTO user_requirements
+                    (session_id, event_type, location, attendees, budget, start_date, end_date, email)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (
+                        session_id,
+                        requirements.get("event_type"),
+                        requirements.get("location"),
+                        requirements.get("attendees"),
+                        requirements.get("budget"),
+                        requirements.get("start_date"),
+                        requirements.get("end_date"),
+                        requirements.get("email")
+                    )
+                )
+            self._conn.commit()
+        await self._run(_upsert)
 
 # -----------------------------
 # Session manager in memory
@@ -550,21 +630,40 @@ async def chat_response(
         # ensure session exists
         entry = await _SESSION_MANAGER.ensure_session(phone=phone, jid=phone_jid, user_name=user_name, client=client)
 
-        # store user message
+        # store user message and extract requirements
         try:
             await _DB.add_message(entry.session_id, sender="user", body=text)
+            
+            # Get messages including the new one
+            messages = await _DB.get_messages_for_session(entry.session_id, limit=20)
+            last_messages = messages[:10]  # Only get 10 last messages for context
+            
+            # Build LLm messages for requirements extraction
+            llm_messages = [
+                {
+                    "role": "assistant" if m["sender"] == "bot" else "user",
+                    "content": m["body"]
+                }
+                for m in reversed(last_messages)
+            ]
+            
+            # Extract and store user requirements
+            requirements = await extract_user_requirements(
+                openai_client=openai_client,
+                messages=llm_messages
+            )
+            await _DB.update_user_requirements(entry.session_id, requirements)
+            
         except Exception:
-            logger.exception("Failed to store incoming message")
+            logger.exception("Failed to store message or extract requirements")
 
         # Build a simple context from last user messages
         messages = await _DB.get_messages_for_session(entry.session_id, limit=20)
-        
-        last_messages = messages[:10]  # Only get 10 last messages for context
-        
+        last_messages = messages[:10]
         last_message = messages[0]
         logger.info(f"Get last message: {last_message}")
         
-        # Build LLm messages, reversed because 'messages' is most recent first
+        # Build LLm messages for response generation
         llm_messages = [
             {
                 "role": "assistant" if m["sender"] == "bot" else "user",
@@ -573,7 +672,11 @@ async def chat_response(
             for m in reversed(last_messages)
         ]
         
-        logger.info(f"Get LLM message: {llm_messages[0]}")
+        logger.info(f"Get First LLM message: {llm_messages[0]}")
+        
+        # Get stored requirements to guide conversation
+        requirements = await _DB.get_user_requirements(entry.session_id)
+        logger.info(f"Stored requirements: {requirements}")
         
         question_class_result = await get_question_class(
             openai_client=openai_client,
@@ -592,6 +695,10 @@ async def chat_response(
         
         if question_class_tools == "general_talk":
             extra_prompt = GENERAL_TALK_EXTRA_PROMPT
+            # Add requirements context to prompt
+            if requirements:
+                extra_prompt += f"\n\nUser requirements: {requirements}"
+                
         elif question_class_tools == "end_session":
             logger.info("User want to end session by chat")
             await _SESSION_MANAGER.end_session(phone=phone, client=client)
@@ -601,7 +708,15 @@ async def chat_response(
                 openai_client=openai_client,
                 messages=llm_messages
             )
+            
+            # Use stored requirements if available
+            if requirements:
+                stored_requirements = json.dumps(requirements)
+                
+            venue_summary = f"{venue_summary}. {stored_requirements}"
+            
             logger.info(f"Venue Summary: {venue_summary}")
+            
             venue_recommendation = await get_venue_recommendation(
                 phone_number=phone,
                 text_body=venue_summary,
@@ -617,37 +732,63 @@ async def chat_response(
                 venue_conclusion=venue_conclusion
             )
         elif question_class_tools == "confirm_booking":
-            venue_summary = await get_venue_summary(
-                openai_client=openai_client,
-                messages=llm_messages
-            )
-            logger.info(f"Venue Summary: {venue_summary}")
-            venue_recommendation = await get_venue_recommendation(
-                phone_number=phone,
-                text_body=venue_summary,
-                k_venue=5
-            )
-            ticket_id = venue_recommendation.get("ticket_id", "N/A")
-            logger.info(f"Ticket ID: {ticket_id}")
-            confirm_booking_result = await get_confirm_booking(
-                openai_client=openai_client,
-                messages=llm_messages,
-                venue_recommendation=venue_recommendation,
-            )
-            venue_name = confirm_booking_result.get("venue_name")
-            venue_id = confirm_booking_result.get("venue_id")
+            # Check if we have email in requirements
+            email = requirements.get("email", "") if requirements else ""
             
-            logger.info(f"Venue Name: {venue_name}, Venue ID: {venue_id}")
-            
-            book_venue_text = await book_venue(
-                ticket_id=ticket_id,
-                venue_name=venue_name,
-                venue_id=venue_id,
-            )
-            
-            extra_prompt = CONFIRM_BOOKING_EXTRA_PROMPT.format(
-                book_venue_text=book_venue_text
-            )
+            if not email:
+                # Request email before proceeding with booking
+                extra_prompt = "Please provide your email address so we can send the booking confirmation details."
+                logger.info("Email not found - requesting user to provide email")
+            else:
+                venue_summary = await get_venue_summary(
+                    openai_client=openai_client,
+                    messages=llm_messages
+                )
+                
+                # Use stored requirements if available
+                if requirements:
+                    stored_requirements = json.dumps(requirements)
+                    
+                venue_summary = f"{venue_summary}. {stored_requirements}"
+                    
+                logger.info(f"Venue Summary: {venue_summary}")
+                
+                venue_recommendation = await get_venue_recommendation(
+                    phone_number=phone,
+                    text_body=venue_summary,
+                    k_venue=5
+                )
+                ticket_id = venue_recommendation.get("ticket_id", "N/A")
+                logger.info(f"Ticket ID: {ticket_id}")
+                
+                confirm_booking_result = await get_confirm_booking(
+                    openai_client=openai_client,
+                    messages=llm_messages,
+                    venue_recommendation=venue_recommendation,
+                )
+                venue_name = confirm_booking_result.get("venue_name")
+                venue_id = confirm_booking_result.get("venue_id")
+                
+                logger.info(f"Venue Name: {venue_name}, Venue ID: {venue_id}")
+                
+                book_venue_text = await book_venue(
+                    ticket_id=ticket_id,
+                    venue_name=venue_name,
+                    venue_id=venue_id,
+                )
+                
+                logger.info(f"Confirm Booking: book_venue_text: {book_venue_text}")
+                
+                book_now_text = await book_now(
+                    ticket_id=ticket_id,
+                    venue_name=venue_name,
+                    venue_id=venue_id,
+                    email_address=email
+                )
+                
+                extra_prompt = CONFIRM_BOOKING_EXTRA_PROMPT.format(
+                    book_venue_text=book_now_text
+                )
         else:
             logger.error(f"Can't find the question_class")
             return

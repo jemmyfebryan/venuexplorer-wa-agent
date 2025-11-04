@@ -21,7 +21,7 @@ question_class_details = {
                 "tools": "confirm_booking"
             },
             "venue_recommendation": {
-                "description": "Use this subclass when the user is still exploring options — asking for venue details, comparing choices, or responding to the assistant's suggestions about potential venues.",
+                "description": "Use this subclass when the user is still exploring options — asking for venue details, comparing choices, or responding to the assistant's suggestions about potential venues. If the chat history never giving venue comparison to user, you must choose this subclass.",
                 "tools": "venue_recommendation",
             }
         }

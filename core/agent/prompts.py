@@ -43,10 +43,10 @@ Use the following recommended venue data as your reference:
 CONFIRM_BOOKING_SYSTEM_PROMPT = """
 You are a reliable assistant skilled at parsing user messages. 
 Your task is to extract and return the following details about the venue selected by the user, based on the chat context and the recommended venue data provided below:
-- venue_name  
-- venue_id  
-- venue_location  
-- venue_amenities
+- venue_name (Key 'name' in the recommended venue)
+- venue_id (Key 'id' in the recommended venue)
+- venue_location (Key 'location' in the recommended venue)
+- venue_amenities (Key 'amenities' in the recommended venue)
 Other data if requested by the user.
 
 Use the following recommended venue data as your reference:  
@@ -95,4 +95,8 @@ The output will be divided into 'response_header' and 'response_content':
 'response_header': The opening sentence for the response to the User.
 'response_content': The content to be conveyed to the User, which can be in a list (-) or a paragraph depending on the context.
 'response_footer': The closing sentence for the User.
+"""
+
+REQUEST_EMAIL_PROMPT = """
+Please provide your email address so we can send the booking confirmation details.
 """
