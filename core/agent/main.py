@@ -32,9 +32,27 @@ async def extract_book_number(text: str) -> int | None:
         return int(match.group(1))
     return None
 
+async def init_openwa_client() -> SocketClient:
+    """
+    Initialize the OpenWA SocketClient in a non-blocking way.
+    Returns the initialized client instead of using a global.
+    """
+    loop = asyncio.get_event_loop()
+
+    def blocking_init():
+        client = SocketClient(
+            f"http://172.17.0.1:{OPEN_WA_PORT}/",
+            api_key="my_secret_api_key",
+        )
+        return client
+
+    client = await loop.run_in_executor(None, blocking_init)
+    return client
+
 async def main():
     logger.info("🚀 Starting WhatsApp bot...")
-    client = SocketClient(f"http://172.17.0.1:{OPEN_WA_PORT}/", api_key="my_secret_api_key")
+    # client = SocketClient(f"http://172.17.0.1:{OPEN_WA_PORT}/", api_key="my_secret_api_key")
+    client = await init_openwa_client()
     bot = ChatBotHandler(client)
     
     @bot.on(r"")
