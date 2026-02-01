@@ -785,14 +785,6 @@ async def chat_response(
                 else:
                     logger.info(f"Venue Name: {venue_name}, Venue ID: {venue_id}")
                     
-                    book_venue_text = await book_venue(
-                        ticket_id=ticket_id,
-                        venue_name=venue_name,
-                        venue_id=venue_id,
-                    )
-                    
-                    logger.info(f"Confirm Booking: book_venue_text: {book_venue_text}")
-                    
                     book_now_text = await book_now(
                         ticket_id=ticket_id,
                         venue_name=venue_name,
@@ -800,6 +792,8 @@ async def chat_response(
                         email_address=email,
                         customer_name=customer_name
                     )
+                    
+                    logger.info(f"Confirm Booking: book_now_text: {book_now_text}")
                     
                     extra_prompt = CONFIRM_BOOKING_EXTRA_PROMPT.format(
                         book_venue_text=book_now_text
