@@ -39,21 +39,26 @@ async def init_openwa_client() -> SocketClient:
     Returns the initialized client instead of using a global.
     """
     loop = asyncio.get_event_loop()
+    url = f"http://{OPEN_WA_HOST}:{OPEN_WA_PORT}/"
+    logger.info(f"🔌 Connecting to OpenWA at {url}")
 
     def blocking_init():
         client = SocketClient(
-            f"http://{OPEN_WA_HOST}:{OPEN_WA_PORT}/",
+            url,
             api_key="my_secret_api_key",
         )
         return client
 
     client = await loop.run_in_executor(None, blocking_init)
+    logger.info("🔌 SocketClient initialized")
     return client
 
 async def main():
     logger.info("🚀 Starting WhatsApp bot...")
+    logger.info(f"📡 OPEN_WA_HOST={OPEN_WA_HOST}, OPEN_WA_PORT={OPEN_WA_PORT}")
     # client = SocketClient(f"http://172.17.0.1:{OPEN_WA_PORT}/", api_key="my_secret_api_key")
     client = await init_openwa_client()
+    logger.info("✅ Client connected, setting up bot handler...")
     bot = ChatBotHandler(client)
     
     @bot.on(r"")
