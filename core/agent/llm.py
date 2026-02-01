@@ -121,7 +121,7 @@ async def extract_user_requirements(
 ) -> Dict[str, Any]:
     """
     Extract structured user requirements from conversation history.
-    Returns a dictionary with keys: event_type, location, attendees, budget, start_date, end_date, email
+    Returns a dictionary with keys: event_type, location, attendees, budget, start_date, end_date, email, customer_name
     """
     system_prompt = """
     You are an assistant that extracts structured information about venue requirements from conversations.
@@ -130,9 +130,10 @@ async def extract_user_requirements(
     - location (city or region)
     - attendees (number of people)
     - budget (as a string with currency)
-    - start_date (YYYY-MM-DD format)
+    - start_date (YYYY-MM-DD format) - the date when the event/booking will take place
     - end_date (YYYY-MM-DD format)
     - email (if provided)
+    - customer_name (the user's full name for booking - NOT extracted from email, must be explicitly stated by user)
     
     If any information is missing, leave it as null.
     """

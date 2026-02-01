@@ -76,9 +76,10 @@ def get_extract_user_requirements_formatted_schema():
                 "budget": {"type": "string", "description": "Budget for the event"},
                 "start_date": {"type": "string", "description": "Event start date"},
                 "end_date": {"type": "string", "description": "Event end date"},
-                "email": {"type": "string", "description": "User's email address"}
+                "email": {"type": "string", "description": "User's email address"},
+                "customer_name": {"type": "string", "description": "User's full name for booking"}
             },
-            "required": ["event_type", "location", "attendees", "budget", "start_date", "end_date", "email"],
+            "required": ["event_type", "location", "attendees", "budget", "start_date", "end_date", "email", "customer_name"],
             "additionalProperties": False
         }
     }

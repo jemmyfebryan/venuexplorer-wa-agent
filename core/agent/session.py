@@ -155,6 +155,7 @@ class ChatDB:
                 start_date TEXT,
                 end_date TEXT,
                 email TEXT,
+                customer_name TEXT,
                 ticket_id TEXT,
                 venue_recommendations TEXT,
                 FOREIGN KEY(session_id) REFERENCES sessions(id)
@@ -278,13 +279,13 @@ class ChatDB:
         def _get():
             cur = self._conn.cursor()
             cur.execute(
-                "SELECT event_type, location, attendees, budget, start_date, end_date, email, ticket_id, venue_recommendations FROM user_requirements WHERE session_id = ?",
+                "SELECT event_type, location, attendees, budget, start_date, end_date, email, customer_name, ticket_id, venue_recommendations FROM user_requirements WHERE session_id = ?",
                 (session_id,)
             )
             row = cur.fetchone()
             if not row:
                 return {}
-            keys = ["event_type", "location", "attendees", "budget", "start_date", "end_date", "email", "ticket_id", "venue_recommendations"]
+            keys = ["event_type", "location", "attendees", "budget", "start_date", "end_date", "email", "customer_name", "ticket_id", "venue_recommendations"]
             result = dict(zip(keys, row))
             # Parse venue_recommendations from JSON string
             if result.get("venue_recommendations"):
@@ -317,6 +318,7 @@ class ChatDB:
                     start_date = COALESCE(?, start_date),
                     end_date = COALESCE(?, end_date),
                     email = COALESCE(?, email),
+                    customer_name = COALESCE(?, customer_name),
                     ticket_id = COALESCE(?, ticket_id),
                     venue_recommendations = COALESCE(?, venue_recommendations)
                     WHERE session_id = ?""",
@@ -328,6 +330,7 @@ class ChatDB:
                         requirements.get("start_date"),
                         requirements.get("end_date"),
                         requirements.get("email"),
+                        requirements.get("customer_name"),
                         requirements.get("ticket_id"),
                         venue_recs_json,
                         session_id
@@ -337,8 +340,8 @@ class ChatDB:
                 # Insert new
                 cur.execute(
                     """INSERT INTO user_requirements
-                    (session_id, event_type, location, attendees, budget, start_date, end_date, email, ticket_id, venue_recommendations)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (session_id, event_type, location, attendees, budget, start_date, end_date, email, customer_name, ticket_id, venue_recommendations)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                     (
                         session_id,
                         requirements.get("event_type"),
@@ -348,6 +351,7 @@ class ChatDB:
                         requirements.get("start_date"),
                         requirements.get("end_date"),
                         requirements.get("email"),
+                        requirements.get("customer_name"),
                         requirements.get("ticket_id"),
                         venue_recs_json
                     )
@@ -782,21 +786,24 @@ Ask them to first describe what kind of venue they're looking for (location, eve
 Do NOT make up or hallucinate any venue names."""
                 logger.info("No stored venues - requesting user to search for venues first")
             else:
-                # Check if we have email in requirements
+                # Check if we have all required fields in requirements
                 email = requirements.get("email", "") if requirements else ""
-                customer_name = entry.user_name or ""
+                customer_name = requirements.get("customer_name", "") if requirements else ""
+                event_date = requirements.get("start_date", "") if requirements else ""
                 
                 # Validate all required fields before booking
                 missing_fields = []
+                if not customer_name:
+                    missing_fields.append("full name")
                 if not email:
                     missing_fields.append("email address")
-                if not customer_name:
-                    missing_fields.append("your name")
+                if not event_date:
+                    missing_fields.append("event date (when you want to book the venue)")
                 
                 if missing_fields:
                     # Request missing information before proceeding with booking
-                    missing_str = " and ".join(missing_fields)
-                    extra_prompt = f"Please provide {missing_str} so we can proceed with the booking confirmation."
+                    missing_str = ", ".join(missing_fields[:-1]) + (" and " + missing_fields[-1] if len(missing_fields) > 1 else missing_fields[0])
+                    extra_prompt = f"Please provide your {missing_str} so we can proceed with the booking confirmation."
                     logger.info(f"Missing required fields for booking: {missing_fields}")
                 else:
                     # Use stored venue data instead of making new API call
@@ -836,7 +843,8 @@ Please specify which venue you'd like to book by mentioning its name."""
                             venue_name=venue_name,
                             venue_id=venue_id,
                             email_address=email,
-                            customer_name=customer_name
+                            customer_name=customer_name,
+                            event_date=event_date
                         )
                         
                         logger.info(f"Confirm Booking: book_now_text: {book_now_text}")
