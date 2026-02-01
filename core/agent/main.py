@@ -43,15 +43,28 @@ async def init_openwa_client() -> SocketClient:
     logger.info(f"🔌 Connecting to OpenWA at {url}")
 
     def blocking_init():
-        client = SocketClient(
-            url,
-            api_key="my_secret_api_key",
-        )
-        return client
+        logger.info("🔌 Creating SocketClient instance...")
+        try:
+            client = SocketClient(
+                url,
+                api_key="my_secret_api_key",
+            )
+            logger.info("🔌 SocketClient created successfully")
+            return client
+        except Exception as e:
+            logger.error(f"❌ SocketClient creation failed: {e}")
+            raise
 
-    client = await loop.run_in_executor(None, blocking_init)
-    logger.info("🔌 SocketClient initialized")
-    return client
+    try:
+        client = await asyncio.wait_for(
+            loop.run_in_executor(None, blocking_init),
+            timeout=30.0
+        )
+        logger.info("🔌 SocketClient initialized")
+        return client
+    except asyncio.TimeoutError:
+        logger.error("❌ SocketClient connection timed out after 30 seconds")
+        raise
 
 async def main():
     logger.info("🚀 Starting WhatsApp bot...")
