@@ -33,7 +33,6 @@ docker-run:
 		--env-file .env \
 		-p $(PORT):$(PORT) \
 		--name $(CONTAINER_NAME) \
-		-e WA_URL="http://host.docker.internal:$(PORT)/" \
 		$(IMAGE_NAME)
 
 docker-stop:
