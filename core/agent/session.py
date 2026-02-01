@@ -823,7 +823,7 @@ async def chat_response(
 
     # send the reply
     try:
-        client.sendText(phone_jid, final_response_str)
+        await client.sendText(phone_jid, final_response_str)
     except Exception:
         logger.exception("Failed to send reply to %s", phone_jid)
 
