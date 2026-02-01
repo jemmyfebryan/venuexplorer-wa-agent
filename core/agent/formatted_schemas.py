@@ -70,14 +70,14 @@ def get_extract_user_requirements_formatted_schema():
             "description": "Extracted user requirements for venue booking",
             "type": "object",
             "properties": {
-                "event_type": {"type": "string", "description": "Type of event"},
-                "location": {"type": "string", "description": "Venue location"},
-                "attendees": {"type": "integer", "description": "Number of attendees"},
-                "budget": {"type": "string", "description": "Budget for the event"},
-                "start_date": {"type": "string", "description": "Event start date"},
-                "end_date": {"type": "string", "description": "Event end date"},
-                "email": {"type": "string", "description": "User's email address"},
-                "customer_name": {"type": "string", "description": "User's full name for booking"}
+                "event_type": {"type": ["string", "null"], "description": "Type of event, null if not mentioned"},
+                "location": {"type": ["string", "null"], "description": "Venue location, null if not mentioned"},
+                "attendees": {"type": ["integer", "null"], "description": "Number of attendees, null if not mentioned"},
+                "budget": {"type": ["string", "null"], "description": "Budget for the event, null if not mentioned"},
+                "start_date": {"type": ["string", "null"], "description": "Event start date in YYYY-MM-DD format, null if not mentioned"},
+                "end_date": {"type": ["string", "null"], "description": "Event end date in YYYY-MM-DD format, null if not mentioned"},
+                "email": {"type": ["string", "null"], "description": "User's email address, null if not explicitly provided"},
+                "customer_name": {"type": ["string", "null"], "description": "User's full name for booking - must be explicitly stated by user, NOT extracted from email, null if not provided"}
             },
             "required": ["event_type", "location", "attendees", "budget", "start_date", "end_date", "email", "customer_name"],
             "additionalProperties": False

@@ -125,17 +125,22 @@ async def extract_user_requirements(
     """
     system_prompt = """
     You are an assistant that extracts structured information about venue requirements from conversations.
-    Extract the following details:
-    - event_type (e.g., corporate, wedding, meeting)
+    Extract the following details ONLY if they are explicitly mentioned by the user:
+    - event_type (e.g., corporate, wedding, meeting, hotel stay)
     - location (city or region)
     - attendees (number of people)
     - budget (as a string with currency)
     - start_date (YYYY-MM-DD format) - the date when the event/booking will take place
     - end_date (YYYY-MM-DD format)
-    - email (if provided)
-    - customer_name (the user's full name for booking - NOT extracted from email, must be explicitly stated by user)
+    - email (user's email address - must be explicitly provided by user)
+    - customer_name (the user's full name for booking)
     
-    If any information is missing, leave it as null.
+    IMPORTANT RULES:
+    - Return null for any field that is NOT explicitly mentioned by the user
+    - For customer_name: ONLY extract if user explicitly states their name like "My name is John" or "I'm John Smith". Do NOT guess or extract from email address.
+    - For email: ONLY extract if user explicitly provides an email address
+    - For start_date: ONLY extract if user mentions a specific date for the event/booking
+    - Do NOT assume or infer values that aren't clearly stated
     """
     
     return await chat_completion(

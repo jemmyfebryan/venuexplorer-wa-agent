@@ -787,9 +787,16 @@ Do NOT make up or hallucinate any venue names."""
                 logger.info("No stored venues - requesting user to search for venues first")
             else:
                 # Check if we have all required fields in requirements
-                email = requirements.get("email", "") if requirements else ""
-                customer_name = requirements.get("customer_name", "") if requirements else ""
-                event_date = requirements.get("start_date", "") if requirements else ""
+                email = (requirements.get("email") or "") if requirements else ""
+                customer_name = (requirements.get("customer_name") or "") if requirements else ""
+                event_date = (requirements.get("start_date") or "") if requirements else ""
+                
+                # Strip whitespace and validate
+                email = email.strip() if email else ""
+                customer_name = customer_name.strip() if customer_name else ""
+                event_date = event_date.strip() if event_date else ""
+                
+                logger.info(f"Booking validation - customer_name: '{customer_name}', email: '{email}', event_date: '{event_date}'")
                 
                 # Validate all required fields before booking
                 missing_fields = []
