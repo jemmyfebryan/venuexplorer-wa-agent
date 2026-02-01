@@ -46,7 +46,6 @@ from typing import Optional, Dict, Any, List
 import copy
 from core.agent.handler import (
     get_venue_recommendation,
-    book_venue,
     book_now
 )
 from core.agent.llm import (
@@ -156,6 +155,8 @@ class ChatDB:
                 start_date TEXT,
                 end_date TEXT,
                 email TEXT,
+                ticket_id TEXT,
+                venue_recommendations TEXT,
                 FOREIGN KEY(session_id) REFERENCES sessions(id)
             );
             """
@@ -277,17 +278,28 @@ class ChatDB:
         def _get():
             cur = self._conn.cursor()
             cur.execute(
-                "SELECT event_type, location, attendees, budget, start_date, end_date, email FROM user_requirements WHERE session_id = ?",
+                "SELECT event_type, location, attendees, budget, start_date, end_date, email, ticket_id, venue_recommendations FROM user_requirements WHERE session_id = ?",
                 (session_id,)
             )
             row = cur.fetchone()
             if not row:
                 return {}
-            keys = ["event_type", "location", "attendees", "budget", "start_date", "end_date", "email"]
-            return dict(zip(keys, row))
+            keys = ["event_type", "location", "attendees", "budget", "start_date", "end_date", "email", "ticket_id", "venue_recommendations"]
+            result = dict(zip(keys, row))
+            # Parse venue_recommendations from JSON string
+            if result.get("venue_recommendations"):
+                try:
+                    result["venue_recommendations"] = json.loads(result["venue_recommendations"])
+                except Exception:
+                    result["venue_recommendations"] = None
+            return result
         return await self._run(_get)
 
     async def update_user_requirements(self, session_id: str, requirements: Dict[str, Any]):
+        # Serialize venue_recommendations to JSON if present
+        venue_recs = requirements.get("venue_recommendations")
+        venue_recs_json = json.dumps(venue_recs) if venue_recs else None
+        
         def _upsert():
             cur = self._conn.cursor()
             # Check if record exists
@@ -304,7 +316,9 @@ class ChatDB:
                     budget = COALESCE(?, budget),
                     start_date = COALESCE(?, start_date),
                     end_date = COALESCE(?, end_date),
-                    email = COALESCE(?, email)
+                    email = COALESCE(?, email),
+                    ticket_id = COALESCE(?, ticket_id),
+                    venue_recommendations = COALESCE(?, venue_recommendations)
                     WHERE session_id = ?""",
                     (
                         requirements.get("event_type"),
@@ -314,6 +328,8 @@ class ChatDB:
                         requirements.get("start_date"),
                         requirements.get("end_date"),
                         requirements.get("email"),
+                        requirements.get("ticket_id"),
+                        venue_recs_json,
                         session_id
                     )
                 )
@@ -321,8 +337,8 @@ class ChatDB:
                 # Insert new
                 cur.execute(
                     """INSERT INTO user_requirements
-                    (session_id, event_type, location, attendees, budget, start_date, end_date, email)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (session_id, event_type, location, attendees, budget, start_date, end_date, email, ticket_id, venue_recommendations)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                     (
                         session_id,
                         requirements.get("event_type"),
@@ -331,7 +347,9 @@ class ChatDB:
                         requirements.get("budget"),
                         requirements.get("start_date"),
                         requirements.get("end_date"),
-                        requirements.get("email")
+                        requirements.get("email"),
+                        requirements.get("ticket_id"),
+                        venue_recs_json
                     )
                 )
             self._conn.commit()
@@ -735,6 +753,14 @@ Ask them to try different criteria such as:
 - Adjusting their requirements (capacity, budget, amenities)
 Do NOT make up or hallucinate any venue names or details."""
             else:
+                # Store ticket_id and venue recommendations for later use
+                ticket_id = venue_recommendation.get("ticket_id")
+                await _DB.update_user_requirements(entry.session_id, {
+                    "ticket_id": ticket_id,
+                    "venue_recommendations": top_k_venues
+                })
+                logger.info(f"Stored venue recommendations with ticket_id: {ticket_id}")
+                
                 venue_conclusion = await get_venue_conclusion(
                     openai_client=openai_client,
                     messages=llm_messages,
@@ -745,53 +771,41 @@ Do NOT make up or hallucinate any venue names or details."""
                     venue_conclusion=venue_conclusion
                 )
         elif question_class_tools == "confirm_booking":
-            # Check if we have email in requirements
-            email = requirements.get("email", "") if requirements else ""
-            customer_name = entry.user_name or ""
+            # Check if we have stored venue recommendations first
+            stored_ticket_id = requirements.get("ticket_id") if requirements else None
+            stored_venues = requirements.get("venue_recommendations") if requirements else None
             
-            # Validate all required fields before booking
-            missing_fields = []
-            if not email:
-                missing_fields.append("email address")
-            if not customer_name:
-                missing_fields.append("your name")
-            
-            if missing_fields:
-                # Request missing information before proceeding with booking
-                missing_str = " and ".join(missing_fields)
-                extra_prompt = f"Please provide {missing_str} so we can proceed with the booking confirmation."
-                logger.info(f"Missing required fields for booking: {missing_fields}")
+            # If no venues have been recommended yet, ask user to search first
+            if not stored_venues:
+                extra_prompt = """The user wants to book but no venue recommendations have been provided yet.
+Ask them to first describe what kind of venue they're looking for (location, event type, capacity, etc.) so you can provide recommendations.
+Do NOT make up or hallucinate any venue names."""
+                logger.info("No stored venues - requesting user to search for venues first")
             else:
-                venue_summary = await get_venue_summary(
-                    openai_client=openai_client,
-                    messages=llm_messages
-                )
+                # Check if we have email in requirements
+                email = requirements.get("email", "") if requirements else ""
+                customer_name = entry.user_name or ""
                 
-                # Use stored requirements if available
-                if requirements:
-                    stored_requirements = json.dumps(requirements)
-                    
-                venue_summary = f"{venue_summary}. {stored_requirements}"
-                    
-                logger.info(f"Venue Summary: {venue_summary}")
+                # Validate all required fields before booking
+                missing_fields = []
+                if not email:
+                    missing_fields.append("email address")
+                if not customer_name:
+                    missing_fields.append("your name")
                 
-                venue_recommendation = await get_venue_recommendation(
-                    phone_number=phone,
-                    text_body=venue_summary,
-                    k_venue=5
-                )
-                
-                # Check if venues were found before proceeding with booking
-                top_k_venues = venue_recommendation.get("top_k_venues", [])
-                if not top_k_venues:
-                    logger.info("No venues found for booking confirmation")
-                    extra_prompt = """No venues were found matching the user's criteria for booking.
-Respond politely that we couldn't find the venue they're looking for.
-Ask them to first search for venues by providing their requirements (location, event type, etc.).
-Do NOT make up or hallucinate any venue names or details."""
+                if missing_fields:
+                    # Request missing information before proceeding with booking
+                    missing_str = " and ".join(missing_fields)
+                    extra_prompt = f"Please provide {missing_str} so we can proceed with the booking confirmation."
+                    logger.info(f"Missing required fields for booking: {missing_fields}")
                 else:
-                    ticket_id = venue_recommendation.get("ticket_id", "N/A")
-                    logger.info(f"Ticket ID: {ticket_id}")
+                    # Use stored venue data instead of making new API call
+                    venue_recommendation = {
+                        "ticket_id": stored_ticket_id,
+                        "top_k_venues": stored_venues
+                    }
+                    
+                    logger.info(f"Using stored venue recommendation with ticket_id: {stored_ticket_id}")
                     
                     confirm_booking_result = await get_confirm_booking(
                         openai_client=openai_client,
@@ -803,13 +817,22 @@ Do NOT make up or hallucinate any venue names or details."""
                     
                     # Validate venue_id before booking
                     if not venue_id:
-                        extra_prompt = "I couldn't determine which venue you want to book. Please specify the venue name or number from the recommendations."
+                        # Format available venues for user to choose
+                        venue_list = "\n".join([
+                            f"- {v.get('payload', {}).get('name', 'Unknown')} (ID: {v.get('payload', {}).get('id', 'N/A')})"
+                            for v in stored_venues[:5]
+                        ])
+                        extra_prompt = f"""I couldn't determine which venue you want to book from your message.
+Here are the available venues from your previous search:
+{venue_list}
+
+Please specify which venue you'd like to book by mentioning its name."""
                         logger.info("Venue ID not found - requesting user to specify venue")
                     else:
                         logger.info(f"Venue Name: {venue_name}, Venue ID: {venue_id}")
                         
                         book_now_text = await book_now(
-                            ticket_id=ticket_id,
+                            ticket_id=stored_ticket_id,
                             venue_name=venue_name,
                             venue_id=venue_id,
                             email_address=email,
