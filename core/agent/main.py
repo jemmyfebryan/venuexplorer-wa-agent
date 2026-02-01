@@ -139,6 +139,12 @@ async def webhook_handler(request: Request):
         if event == "onMessage":
             msg_data = data.get("data", {})
             
+            # Debug: log the full message structure to understand the format
+            logger.info(f"📋 Full message data keys: {list(msg_data.keys()) if isinstance(msg_data, dict) else type(msg_data)}")
+            logger.info(f"📋 'from' field: {msg_data.get('from')}")
+            logger.info(f"📋 'chatId' field: {msg_data.get('chatId')}")
+            logger.info(f"📋 'id' field: {msg_data.get('id')}")
+            
             # Skip group messages and messages from self
             if msg_data.get("isGroupMsg") or msg_data.get("fromMe"):
                 logger.debug("Skipping group/self message")

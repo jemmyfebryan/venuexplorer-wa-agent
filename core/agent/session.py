@@ -644,7 +644,24 @@ async def chat_response(
             return ""
 
         phone_jid = msg["data"].get("from")
-        phone = phone_jid.split("@")[0]
+        logger.info(f"Raw phone_jid from message: {phone_jid}")
+        logger.info(f"Full msg data keys: {msg['data'].keys() if isinstance(msg.get('data'), dict) else 'N/A'}")
+        
+        # Extract phone number from JID format (e.g., "6285850434383@c.us" -> "6285850434383")
+        if phone_jid and "@" in str(phone_jid):
+            phone = phone_jid.split("@")[0]
+        else:
+            # Fallback: try to get chatId or sender.id if from is not in expected format
+            chat_id = msg["data"].get("chatId") or msg["data"].get("chat", {}).get("id", "")
+            if chat_id and "@" in str(chat_id):
+                phone = chat_id.split("@")[0]
+                phone_jid = chat_id
+            else:
+                logger.warning(f"Could not extract valid phone number from message. from={phone_jid}, chatId={chat_id}")
+                phone = str(phone_jid) if phone_jid else "unknown"
+        
+        logger.info(f"Extracted phone number: {phone}")
+        
         sender = msg["data"].get("sender", {}) or {}
         user_name = sender.get("pushname", "")
         text = (msg["data"].get("body") or "").strip()
