@@ -134,8 +134,9 @@ async def webhook_handler(request: Request):
         event = data.get("event", "unknown")
         logger.info(f"📨 Received webhook event: {event}")
         
-        # Handle message events
-        if event in ["onAnyMessage", "onMessage"]:
+        # Only process onMessage event (ignore onAnyMessage to avoid duplicates)
+        # open-wa sends BOTH events for each message
+        if event == "onMessage":
             msg_data = data.get("data", {})
             
             # Skip group messages and messages from self
@@ -149,6 +150,9 @@ async def webhook_handler(request: Request):
             
             # Process the message
             await process_message(msg_data)
+        elif event == "onAnyMessage":
+            # Skip onAnyMessage to avoid duplicate processing
+            logger.debug("Skipping onAnyMessage (using onMessage instead)")
         
         return {"status": "ok"}
     except Exception as e:
