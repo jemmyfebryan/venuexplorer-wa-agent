@@ -734,11 +734,20 @@ async def chat_response(
         elif question_class_tools == "confirm_booking":
             # Check if we have email in requirements
             email = requirements.get("email", "") if requirements else ""
+            customer_name = entry.user_name or ""
             
+            # Validate all required fields before booking
+            missing_fields = []
             if not email:
-                # Request email before proceeding with booking
-                extra_prompt = "Please provide your email address so we can send the booking confirmation details."
-                logger.info("Email not found - requesting user to provide email")
+                missing_fields.append("email address")
+            if not customer_name:
+                missing_fields.append("your name")
+            
+            if missing_fields:
+                # Request missing information before proceeding with booking
+                missing_str = " and ".join(missing_fields)
+                extra_prompt = f"Please provide {missing_str} so we can proceed with the booking confirmation."
+                logger.info(f"Missing required fields for booking: {missing_fields}")
             else:
                 venue_summary = await get_venue_summary(
                     openai_client=openai_client,
@@ -769,26 +778,32 @@ async def chat_response(
                 venue_name = confirm_booking_result.get("venue_name")
                 venue_id = confirm_booking_result.get("venue_id")
                 
-                logger.info(f"Venue Name: {venue_name}, Venue ID: {venue_id}")
-                
-                book_venue_text = await book_venue(
-                    ticket_id=ticket_id,
-                    venue_name=venue_name,
-                    venue_id=venue_id,
-                )
-                
-                logger.info(f"Confirm Booking: book_venue_text: {book_venue_text}")
-                
-                book_now_text = await book_now(
-                    ticket_id=ticket_id,
-                    venue_name=venue_name,
-                    venue_id=venue_id,
-                    email_address=email
-                )
-                
-                extra_prompt = CONFIRM_BOOKING_EXTRA_PROMPT.format(
-                    book_venue_text=book_now_text
-                )
+                # Validate venue_id before booking
+                if not venue_id:
+                    extra_prompt = "I couldn't determine which venue you want to book. Please specify the venue name or number from the recommendations."
+                    logger.info("Venue ID not found - requesting user to specify venue")
+                else:
+                    logger.info(f"Venue Name: {venue_name}, Venue ID: {venue_id}")
+                    
+                    book_venue_text = await book_venue(
+                        ticket_id=ticket_id,
+                        venue_name=venue_name,
+                        venue_id=venue_id,
+                    )
+                    
+                    logger.info(f"Confirm Booking: book_venue_text: {book_venue_text}")
+                    
+                    book_now_text = await book_now(
+                        ticket_id=ticket_id,
+                        venue_name=venue_name,
+                        venue_id=venue_id,
+                        email_address=email,
+                        customer_name=customer_name
+                    )
+                    
+                    extra_prompt = CONFIRM_BOOKING_EXTRA_PROMPT.format(
+                        book_venue_text=book_now_text
+                    )
         else:
             logger.error(f"Can't find the question_class")
             return

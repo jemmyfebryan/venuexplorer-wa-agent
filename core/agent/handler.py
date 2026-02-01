@@ -157,7 +157,7 @@ async def chat_inquiry_next(user_name: str, phone_number: str, last_message: str
 
     return response_text
 
-async def book_now(ticket_id: str, venue_name: str, venue_id: str, email_address: str, send_email: bool = True):
+async def book_now(ticket_id: str, venue_name: str, venue_id: str, email_address: str, customer_name: str, send_email: bool = True):
     book_now_url = BOOK_NOW_URL.format(VPS_URL=VPS_URL)
     logger.info(f"Book Now: book_now_url: {book_now_url}")
     
@@ -166,6 +166,7 @@ async def book_now(ticket_id: str, venue_name: str, venue_id: str, email_address
         "ticket_id": ticket_id,
         "email_address": email_address,
         "venue_id": venue_id,
+        "customer_name": customer_name,
     }
     
     logger.info(f"Book Now: payload: {payload}")
