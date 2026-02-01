@@ -722,15 +722,28 @@ async def chat_response(
                 text_body=venue_summary,
                 k_venue=5
             )
-            venue_conclusion = await get_venue_conclusion(
-                openai_client=openai_client,
-                messages=llm_messages,
-                venue_recommendation=venue_recommendation
-            )
-            logger.info(f"Venue Conclusion: {venue_conclusion}")
-            extra_prompt = VENUE_RECOMMENDATION_EXTRA_PROMPT.format(
-                venue_conclusion=venue_conclusion
-            )
+            
+            # Check if venues were found
+            top_k_venues = venue_recommendation.get("top_k_venues", [])
+            if not top_k_venues:
+                logger.info("No venues found in recommendation")
+                extra_prompt = """No venues were found matching the user's criteria. 
+Respond politely that we couldn't find any venues matching their requirements.
+Ask them to try different criteria such as:
+- A different location or city
+- Different event type
+- Adjusting their requirements (capacity, budget, amenities)
+Do NOT make up or hallucinate any venue names or details."""
+            else:
+                venue_conclusion = await get_venue_conclusion(
+                    openai_client=openai_client,
+                    messages=llm_messages,
+                    venue_recommendation=venue_recommendation
+                )
+                logger.info(f"Venue Conclusion: {venue_conclusion}")
+                extra_prompt = VENUE_RECOMMENDATION_EXTRA_PROMPT.format(
+                    venue_conclusion=venue_conclusion
+                )
         elif question_class_tools == "confirm_booking":
             # Check if we have email in requirements
             email = requirements.get("email", "") if requirements else ""
@@ -767,37 +780,47 @@ async def chat_response(
                     text_body=venue_summary,
                     k_venue=5
                 )
-                ticket_id = venue_recommendation.get("ticket_id", "N/A")
-                logger.info(f"Ticket ID: {ticket_id}")
                 
-                confirm_booking_result = await get_confirm_booking(
-                    openai_client=openai_client,
-                    messages=llm_messages,
-                    venue_recommendation=venue_recommendation,
-                )
-                venue_name = confirm_booking_result.get("venue_name")
-                venue_id = confirm_booking_result.get("venue_id")
-                
-                # Validate venue_id before booking
-                if not venue_id:
-                    extra_prompt = "I couldn't determine which venue you want to book. Please specify the venue name or number from the recommendations."
-                    logger.info("Venue ID not found - requesting user to specify venue")
+                # Check if venues were found before proceeding with booking
+                top_k_venues = venue_recommendation.get("top_k_venues", [])
+                if not top_k_venues:
+                    logger.info("No venues found for booking confirmation")
+                    extra_prompt = """No venues were found matching the user's criteria for booking.
+Respond politely that we couldn't find the venue they're looking for.
+Ask them to first search for venues by providing their requirements (location, event type, etc.).
+Do NOT make up or hallucinate any venue names or details."""
                 else:
-                    logger.info(f"Venue Name: {venue_name}, Venue ID: {venue_id}")
+                    ticket_id = venue_recommendation.get("ticket_id", "N/A")
+                    logger.info(f"Ticket ID: {ticket_id}")
                     
-                    book_now_text = await book_now(
-                        ticket_id=ticket_id,
-                        venue_name=venue_name,
-                        venue_id=venue_id,
-                        email_address=email,
-                        customer_name=customer_name
+                    confirm_booking_result = await get_confirm_booking(
+                        openai_client=openai_client,
+                        messages=llm_messages,
+                        venue_recommendation=venue_recommendation,
                     )
+                    venue_name = confirm_booking_result.get("venue_name")
+                    venue_id = confirm_booking_result.get("venue_id")
                     
-                    logger.info(f"Confirm Booking: book_now_text: {book_now_text}")
-                    
-                    extra_prompt = CONFIRM_BOOKING_EXTRA_PROMPT.format(
-                        book_venue_text=book_now_text
-                    )
+                    # Validate venue_id before booking
+                    if not venue_id:
+                        extra_prompt = "I couldn't determine which venue you want to book. Please specify the venue name or number from the recommendations."
+                        logger.info("Venue ID not found - requesting user to specify venue")
+                    else:
+                        logger.info(f"Venue Name: {venue_name}, Venue ID: {venue_id}")
+                        
+                        book_now_text = await book_now(
+                            ticket_id=ticket_id,
+                            venue_name=venue_name,
+                            venue_id=venue_id,
+                            email_address=email,
+                            customer_name=customer_name
+                        )
+                        
+                        logger.info(f"Confirm Booking: book_now_text: {book_now_text}")
+                        
+                        extra_prompt = CONFIRM_BOOKING_EXTRA_PROMPT.format(
+                            book_venue_text=book_now_text
+                        )
         else:
             logger.error(f"Can't find the question_class")
             return
