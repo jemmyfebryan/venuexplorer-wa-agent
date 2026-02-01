@@ -21,14 +21,14 @@ question_class_details = {
                 "tools": "confirm_booking"
             },
             "venue_recommendation": {
-                "description": "Use this subclass when the user is still exploring options — asking for venue details, comparing choices, or responding to the assistant's suggestions about potential venues. If the chat history never giving venue comparison to user, you must choose this subclass.",
+                "description": "Use this subclass when the user is still exploring options — asking for venue details, comparing choices, or responding to the assistant's suggestions about potential venues. If the chat history never giving venue comparison to user, you must choose this subclass. IMPORTANT: Also use this subclass when user asks for 'best venues', 'venue recommendations', 'suggest venues', or any request to see available venues in a location.",
                 "tools": "venue_recommendation",
             }
         }
 
     },
     "general_talk": {
-        "description": "Very general message such as basic confirming, greetings, thanks, apologies, and so on.",
+        "description": "Very general message such as basic confirming, greetings, thanks, apologies, and so on. DO NOT use this class if user asks for venue recommendations or best venues - use 'inquiry/venue_recommendation' instead.",
         "tools": "general_talk",
     },
     "end_session": {

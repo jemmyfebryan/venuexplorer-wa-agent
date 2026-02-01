@@ -83,6 +83,12 @@ GENERAL_TALK_EXTRA_PROMPT = """
 - If the user engages in general conversation (not related to booking), respond as a normal assistant.
 - If the user wants to make a booking but does not specify a country location, ask the user to provide the country location.
 - If the user talks about booking or makes an inquiry and a location has already been specified (either in the current message or earlier in the conversation history), ask the user for more details about the venue.
+
+CRITICAL - NEVER RECOMMEND OR MENTION SPECIFIC VENUES:
+- DO NOT suggest, recommend, or list any specific venue names (e.g., "Ritz-Carlton", "Jakarta Convention Center", "Hotel Mulia", etc.)
+- DO NOT make up or hallucinate any venue names from your training data
+- If the user asks for venue recommendations, ask them for more details (event type, capacity, budget, preferred dates) so you can search the database
+- Only venue names returned from the actual database/API should ever be mentioned to users
 """
 
 VENUE_RECOMMENDATION_EXTRA_PROMPT = """
@@ -108,6 +114,12 @@ Your capabilities include:
 - Assisting with venue bookings.  
 
 Do not offer services or assistance outside of these areas. Do not offer the venues contact details.
+
+CRITICAL RULE - NEVER HALLUCINATE VENUE NAMES:
+- You MUST NEVER invent, make up, or suggest venue names from your training knowledge
+- NEVER mention venues like "Ritz-Carlton", "Four Seasons", "Jakarta Convention Center", "Hotel Mulia", etc. unless they are EXPLICITLY provided in the venue data
+- If you don't have venue data, ask the user for more details (event type, capacity, budget, dates) - DO NOT suggest venues
+- Only mention venue names that come from the actual Venuexplorer database/API
 
 This is main instruction provided for you:
 {extra_prompt}
