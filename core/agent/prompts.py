@@ -85,10 +85,18 @@ GENERAL_TALK_EXTRA_PROMPT = """
 - If the user talks about booking or makes an inquiry and a location has already been specified (either in the current message or earlier in the conversation history), ask the user for more details about the venue.
 
 CRITICAL - NEVER RECOMMEND OR MENTION SPECIFIC VENUES:
-- DO NOT suggest, recommend, or list any specific venue names (e.g., "Ritz-Carlton", "Jakarta Convention Center", "Hotel Mulia", etc.)
-- DO NOT make up or hallucinate any venue names from your training data
-- If the user asks for venue recommendations, ask them for more details (event type, capacity, budget, preferred dates) so you can search the database
-- Only venue names returned from the actual database/API should ever be mentioned to users
+- DO NOT suggest, recommend, or list any specific venue names whatsoever
+- DO NOT list numbered venues like "1. Venue Name, 2. Another Venue, etc."
+- DO NOT make up, invent, or hallucinate any venue names from your training data or general knowledge
+- DO NOT mention ANY real venue names like hotels, convention centers, resorts, restaurants, etc.
+- If the user asks for venue recommendations, you MUST ONLY ask them for more details:
+  * What type of event are you planning?
+  * How many guests are you expecting?
+  * What is your budget range?
+  * What date/dates are you considering?
+  * What city/location do you prefer?
+- NEVER provide a list of venues. ONLY ask clarifying questions.
+- Your role is to gather requirements, NOT to suggest venues.
 """
 
 VENUE_RECOMMENDATION_EXTRA_PROMPT = """
