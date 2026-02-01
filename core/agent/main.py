@@ -22,7 +22,8 @@ load_dotenv()
 
 openai_client = create_client()
 
-OPEN_WA_PORT = os.getenv("OPEN_WA_PORT")
+OPEN_WA_HOST = os.getenv("OPEN_WA_HOST", "172.17.0.1")
+OPEN_WA_PORT = os.getenv("OPEN_WA_PORT", "8003")
 
 book_pattern = re.compile(r"^book (\d+)$", re.IGNORECASE)
     
@@ -41,7 +42,7 @@ async def init_openwa_client() -> SocketClient:
 
     def blocking_init():
         client = SocketClient(
-            f"http://172.17.0.1:{OPEN_WA_PORT}/",
+            f"http://{OPEN_WA_HOST}:{OPEN_WA_PORT}/",
             api_key="my_secret_api_key",
         )
         return client
