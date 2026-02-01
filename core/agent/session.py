@@ -643,10 +643,17 @@ async def chat_response(
         if msg.get("data", {}).get("isGroupMsg"):
             return ""
 
-        # Get phone from 'from' field, fallback to 'chatId' if needed
-        phone_jid = msg["data"].get("from") or msg["data"].get("chatId") or ""
-        phone = phone_jid.split("@")[0] if "@" in phone_jid else phone_jid
-        sender = msg["data"].get("sender", {}) or {}
+        # Get phone number - try multiple fields as open-wa structure can vary
+        # Priority: chatId > chat.id > from (chatId is most reliable for the actual chat/phone)
+        msg_data = msg["data"]
+        phone_jid = (
+            msg_data.get("chatId") or 
+            msg_data.get("chat", {}).get("id") or 
+            msg_data.get("from") or 
+            ""
+        )
+        phone = phone_jid.split("@")[0] if "@" in str(phone_jid) else str(phone_jid)
+        sender = msg_data.get("sender", {}) or {}
         user_name = sender.get("pushname", "")
         text = (msg["data"].get("body") or "").strip()
 
