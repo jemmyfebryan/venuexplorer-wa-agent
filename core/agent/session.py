@@ -792,15 +792,36 @@ Do NOT make up or hallucinate any venue names or details."""
                     })
                     logger.info(f"Stored venue recommendations with ticket_id: {ticket_id}")
                     
-                    venue_conclusion = await get_venue_conclusion(
-                        openai_client=openai_client,
-                        messages=llm_messages,
-                        venue_recommendation=venue_recommendation
-                    )
-                    logger.info(f"Venue Conclusion: {venue_conclusion}")
-                    extra_prompt = VENUE_RECOMMENDATION_EXTRA_PROMPT.format(
-                        venue_conclusion=venue_conclusion
-                    )
+                    # DIRECTLY format venues from API data - NO LLM to prevent hallucination
+                    formatted_venues = []
+                    for idx, venue in enumerate(top_k_venues, start=1):
+                        payload = venue.get("payload", {})
+                        venue_text = f"{idx}. *{payload.get('name', 'Unknown')}*\n"
+                        venue_text += f"   📍 Location: {payload.get('location', 'N/A')}\n"
+                        venue_text += f"   🏷️ Type: {payload.get('type', 'N/A')}\n"
+                        venue_text += f"   ⭐ Amenities: {payload.get('amenities', 'N/A')}"
+                        formatted_venues.append(venue_text)
+                    
+                    venue_list_text = "\n\n".join(formatted_venues)
+                    
+                    if len(top_k_venues) == 1:
+                        extra_prompt = f"""Present this EXACT venue to the user (do NOT modify or add any venue details):
+
+I have found one venue that fits your criteria:
+
+{venue_list_text}
+
+Ask if they would like to proceed with booking this venue."""
+                    else:
+                        extra_prompt = f"""Present these EXACT venues to the user (do NOT modify, add, or remove any venue details):
+
+I have found {len(top_k_venues)} venues that fit your criteria:
+
+{venue_list_text}
+
+Ask the user which venue they prefer so you can assist with booking."""
+                    
+                    logger.info(f"Formatted venues directly from API: {len(top_k_venues)} venues")
         elif question_class_tools == "confirm_booking":
             # Check if we have stored venue recommendations first
             stored_ticket_id = requirements.get("ticket_id") if requirements else None
