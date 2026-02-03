@@ -149,6 +149,7 @@ class ChatDB:
             CREATE TABLE IF NOT EXISTS user_requirements (
                 session_id TEXT NOT NULL,
                 event_type TEXT,
+                country TEXT,
                 location TEXT,
                 attendees INTEGER,
                 budget TEXT,
@@ -279,13 +280,13 @@ class ChatDB:
         def _get():
             cur = self._conn.cursor()
             cur.execute(
-                "SELECT event_type, location, attendees, budget, start_date, end_date, email, customer_name, ticket_id, venue_recommendations FROM user_requirements WHERE session_id = ?",
+                "SELECT event_type, country, location, attendees, budget, start_date, end_date, email, customer_name, ticket_id, venue_recommendations FROM user_requirements WHERE session_id = ?",
                 (session_id,)
             )
             row = cur.fetchone()
             if not row:
                 return {}
-            keys = ["event_type", "location", "attendees", "budget", "start_date", "end_date", "email", "customer_name", "ticket_id", "venue_recommendations"]
+            keys = ["event_type", "country", "location", "attendees", "budget", "start_date", "end_date", "email", "customer_name", "ticket_id", "venue_recommendations"]
             result = dict(zip(keys, row))
             # Parse venue_recommendations from JSON string
             if result.get("venue_recommendations"):
@@ -312,6 +313,7 @@ class ChatDB:
                 cur.execute(
                     """UPDATE user_requirements SET
                     event_type = COALESCE(?, event_type),
+                    country = COALESCE(?, country),
                     location = COALESCE(?, location),
                     attendees = COALESCE(?, attendees),
                     budget = COALESCE(?, budget),
@@ -324,6 +326,7 @@ class ChatDB:
                     WHERE session_id = ?""",
                     (
                         requirements.get("event_type"),
+                        requirements.get("country"),
                         requirements.get("location"),
                         requirements.get("attendees"),
                         requirements.get("budget"),
@@ -340,11 +343,12 @@ class ChatDB:
                 # Insert new
                 cur.execute(
                     """INSERT INTO user_requirements
-                    (session_id, event_type, location, attendees, budget, start_date, end_date, email, customer_name, ticket_id, venue_recommendations)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (session_id, event_type, country, location, attendees, budget, start_date, end_date, email, customer_name, ticket_id, venue_recommendations)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                     (
                         session_id,
                         requirements.get("event_type"),
+                        requirements.get("country"),
                         requirements.get("location"),
                         requirements.get("attendees"),
                         requirements.get("budget"),
@@ -734,54 +738,69 @@ async def chat_response(
             await _SESSION_MANAGER.end_session(phone=phone, client=client)
             return
         elif question_class_tools == "venue_recommendation":
-            venue_summary = await get_venue_summary(
-                openai_client=openai_client,
-                messages=llm_messages
-            )
+            # CRITICAL: Check if country is provided before proceeding with venue recommendations
+            country = (requirements.get("country") or "").strip() if requirements else ""
             
-            # Use stored requirements if available
-            if requirements:
-                stored_requirements = json.dumps(requirements)
+            if not country:
+                # Country not provided - must ask for country first
+                logger.info("Country not provided - asking user for country first")
+                extra_prompt = """CRITICAL: The user has NOT provided a country yet.
+You MUST ask for the country FIRST before proceeding with any venue recommendations.
+
+Respond with a friendly message asking which country they are looking for a venue in.
+Example: "To help you find the perfect venue, could you please tell me which country you're looking in?"
+
+Do NOT proceed with venue search until country is provided.
+Do NOT make up or hallucinate any venue names."""
+            else:
+                venue_summary = await get_venue_summary(
+                    openai_client=openai_client,
+                    messages=llm_messages
+                )
                 
-            venue_summary = f"{venue_summary}. {stored_requirements}"
-            
-            logger.info(f"Venue Summary: {venue_summary}")
-            
-            venue_recommendation = await get_venue_recommendation(
-                phone_number=phone,
-                text_body=venue_summary,
-                k_venue=5
-            )
-            
-            # Check if venues were found
-            top_k_venues = venue_recommendation.get("top_k_venues", [])
-            if not top_k_venues:
-                logger.info("No venues found in recommendation")
-                extra_prompt = """No venues were found matching the user's criteria. 
+                # Use stored requirements if available
+                if requirements:
+                    stored_requirements = json.dumps(requirements)
+                    
+                venue_summary = f"{venue_summary}. {stored_requirements}"
+                
+                logger.info(f"Venue Summary: {venue_summary}")
+                
+                venue_recommendation = await get_venue_recommendation(
+                    phone_number=phone,
+                    text_body=venue_summary,
+                    k_venue=5
+                )
+                
+                # Check if venues were found
+                top_k_venues = venue_recommendation.get("top_k_venues", [])
+                if not top_k_venues:
+                    logger.info("No venues found in recommendation")
+                    extra_prompt = """No venues were found matching the user's criteria. 
 Respond politely that we couldn't find any venues matching their requirements.
 Ask them to try different criteria such as:
 - A different location or city
 - Different event type
 - Adjusting their requirements (capacity, budget, amenities)
 Do NOT make up or hallucinate any venue names or details."""
-            else:
-                # Store ticket_id and venue recommendations for later use
-                ticket_id = venue_recommendation.get("ticket_id")
-                await _DB.update_user_requirements(entry.session_id, {
-                    "ticket_id": ticket_id,
-                    "venue_recommendations": top_k_venues
-                })
-                logger.info(f"Stored venue recommendations with ticket_id: {ticket_id}")
-                
-                venue_conclusion = await get_venue_conclusion(
-                    openai_client=openai_client,
-                    messages=llm_messages,
-                    venue_recommendation=venue_recommendation
-                )
-                logger.info(f"Venue Conclusion: {venue_conclusion}")
-                extra_prompt = VENUE_RECOMMENDATION_EXTRA_PROMPT.format(
-                    venue_conclusion=venue_conclusion
-                )
+                else:
+                    # Store ticket_id and venue recommendations for later use
+                    ticket_id = venue_recommendation.get("ticket_id")
+                    await _DB.update_user_requirements(entry.session_id, {
+                        "ticket_id": ticket_id,
+                        "venue_recommendations": top_k_venues
+                    })
+                    logger.info(f"Stored venue recommendations with ticket_id: {ticket_id}")
+                    
+                    venue_conclusion = await get_venue_conclusion(
+                        openai_client=openai_client,
+                        messages=llm_messages,
+                        venue_recommendation=venue_recommendation
+                    )
+                    logger.info(f"Venue Conclusion: {venue_conclusion}")
+                    extra_prompt = VENUE_RECOMMENDATION_EXTRA_PROMPT.format(
+                        venue_conclusion=venue_conclusion
+                    )
         elif question_class_tools == "confirm_booking":
             # Check if we have stored venue recommendations first
             stored_ticket_id = requirements.get("ticket_id") if requirements else None

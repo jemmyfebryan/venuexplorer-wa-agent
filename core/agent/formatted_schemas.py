@@ -71,7 +71,8 @@ def get_extract_user_requirements_formatted_schema():
             "type": "object",
             "properties": {
                 "event_type": {"type": ["string", "null"], "description": "Type of event, null if not mentioned"},
-                "location": {"type": ["string", "null"], "description": "Venue location, null if not mentioned"},
+                "country": {"type": ["string", "null"], "description": "Country where the venue should be located (e.g., Indonesia, Singapore, Malaysia), null if not mentioned"},
+                "location": {"type": ["string", "null"], "description": "City or specific area within the country, null if not mentioned"},
                 "attendees": {"type": ["integer", "null"], "description": "Number of attendees, null if not mentioned"},
                 "budget": {"type": ["string", "null"], "description": "Budget for the event, null if not mentioned"},
                 "start_date": {"type": ["string", "null"], "description": "Event start date in YYYY-MM-DD format, null if not mentioned"},
@@ -79,7 +80,7 @@ def get_extract_user_requirements_formatted_schema():
                 "email": {"type": ["string", "null"], "description": "User's email address, null if not explicitly provided"},
                 "customer_name": {"type": ["string", "null"], "description": "User's full name for booking - must be explicitly stated by user, NOT extracted from email, null if not provided"}
             },
-            "required": ["event_type", "location", "attendees", "budget", "start_date", "end_date", "email", "customer_name"],
+            "required": ["event_type", "country", "location", "attendees", "budget", "start_date", "end_date", "email", "customer_name"],
             "additionalProperties": False
         }
     }

@@ -121,13 +121,14 @@ async def extract_user_requirements(
 ) -> Dict[str, Any]:
     """
     Extract structured user requirements from conversation history.
-    Returns a dictionary with keys: event_type, location, attendees, budget, start_date, end_date, email, customer_name
+    Returns a dictionary with keys: event_type, country, location, attendees, budget, start_date, end_date, email, customer_name
     """
     system_prompt = """
     You are an assistant that extracts structured information about venue requirements from conversations.
     Extract the following details ONLY if they are explicitly mentioned by the user:
     - event_type (e.g., corporate, wedding, meeting, hotel stay)
-    - location (city or region)
+    - country (ONLY if user explicitly states a country name like "Indonesia", "Singapore", "Malaysia", "Thailand", "Vietnam", etc.)
+    - location (city or specific area, e.g., Jakarta, Bali, Kuala Lumpur, Orchard Road)
     - attendees (number of people)
     - budget (as a string with currency)
     - start_date (YYYY-MM-DD format) - the date when the event/booking will take place
@@ -135,12 +136,23 @@ async def extract_user_requirements(
     - email (user's email address - must be explicitly provided by user)
     - customer_name (the user's full name for booking)
     
-    IMPORTANT RULES:
+    CRITICAL RULES FOR COUNTRY:
+    - ONLY extract country if the user EXPLICITLY mentions a country name
+    - DO NOT infer or assume country from cities, streets, or landmarks
+    - Return null for country if not explicitly stated
+    Examples:
+      - "meeting room in Orchard Road" -> country = null (city/street is NOT country)
+      - "venue in Jakarta" -> country = null (city is NOT country)
+      - "hotel in Bali" -> country = null (island is NOT country)
+      - "meeting room in Indonesia" -> country = "Indonesia" (explicitly stated)
+      - "venue in Singapore" -> country = "Singapore" (explicitly stated as country)
+      - "hotel in Malaysia" -> country = "Malaysia" (explicitly stated)
+    
+    OTHER RULES:
     - Return null for any field that is NOT explicitly mentioned by the user
     - For customer_name: ONLY extract if user explicitly states their name like "My name is John" or "I'm John Smith". Do NOT guess or extract from email address.
     - For email: ONLY extract if user explicitly provides an email address
     - For start_date: ONLY extract if user mentions a specific date for the event/booking
-    - Do NOT assume or infer values that aren't clearly stated
     """
     
     return await chat_completion(
